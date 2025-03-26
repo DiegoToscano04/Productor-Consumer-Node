@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  backend-barbosa:
+    build:
+      context: ./Productor-NodeJS # Verifica que esta ruta contiene el Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Configuración de PostgreSQL
+      - DB_HOST=db-barbosa
+      - DB_PORT=5432
+      - DB_NAME=biblioteca_barbosa
+      - DB_USER=Solus
+      - DB_PASSWORD=123456
+      - DATABASE_URL=postgresql://Solus:123456@db-barbosa:5432/biblioteca_barbosa
+
+      # Configuración de RabbitMQ
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=123456
+
+      # Configuración del servidor Node.js
+      - PORT=3000
+      - NODE_ENV=production
+    depends_on:
+      db-barbosa:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - my_network
+
+  db-barbosa:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=biblioteca_barbosa
+      - POSTGRES_USER=Solus
+      - POSTGRES_PASSWORD=123456
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-data-barbosa:/var/lib/postgresql/data
+    networks:
+      - my_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U Solus -d biblioteca_barbosa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"  # Puerto para la conexión AMQP
+      - "15672:15672"  # Interfaz de administración
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=123456
+    networks:
+      - my_network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  consumidor-barbosa:
+    build: ./Consumidor-NodeJS
+    container_name: consumidor-nodejs-barbosa
+    environment:
+      # Configuración de RabbitMQ
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=123456
+
+      # Configuración de PostgreSQL
+      - DB_HOST=db-barbosa
+      - DB_PORT=5432
+      - DB_NAME=biblioteca_barbosa
+      - DB_USER=Solus
+      - DB_PASSWORD=123456
+    depends_on:
+      db-barbosa:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - my_network
+
+volumes:
+  postgres-data-barbosa:
+
+networks:
+  my_network:
+    driver: bridge
